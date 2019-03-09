@@ -1,3 +1,21 @@
+This is a fork of https://github.com/9ballsyndrome/WebGL_Compute_shader
+
+As an exercise to understand the code, I adapted the demos so that they can be used with Chrome's builtin local files server. 
+Open chrome dev tools, go to Sources tab and after cloning the repo, add the repo folder as "Overrides".
+Then, with your DevTools open, open "http://bitonic.local/" for example.
+
+
+To get it to work, you might also need to add at the end of your etc/hosts file:
+
+```
+127.0.0.1		boids.local
+127.0.0.1		bitonic.local
+127.0.0.1		simple.local
+127.0.0.1		vertex.local
+```
+If you get an "incorrect mimetype" error in the console, you will also need to enable the following Chrome extension to set correct mimetypes for JS and CSS files : https://github.com/misterfresh/mimetype-enforcer
+. Clone the repo and then on the chrome://extensions/ page, add the folder as unpacked extension.
+
 # WebGL 2.0 Compute shader Demos
 
 This repository shows samples of WebGL Compute shader. For detail, see [Intent to Implement: WebGL 2.0 Compute](https://groups.google.com/a/chromium.org/forum/#!msg/blink-dev/bPD47wqY-r8/5DzgvEwFBAAJ) and [WebGL 2.0 Compute Specification - Proposal](https://docs.google.com/document/d/1EwhDJO_lBH1mGMMwheQUXGhhFk9yoC98Ant3TPqwmmA/view).

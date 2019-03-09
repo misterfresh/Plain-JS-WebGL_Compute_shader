@@ -12,3 +12,5 @@ node_modules
 !*.gitkeep
 yarn.lock
 package-lock.json
+
+.idea
