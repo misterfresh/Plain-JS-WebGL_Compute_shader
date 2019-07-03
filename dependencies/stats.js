@@ -2,12 +2,12 @@
  * @author mrdoob / http://mrdoob.com/
  */
 
-var Stats = function () {
+var Stats = function (options = { position: {top: 0, left: 0}}) {
 
     var mode = 0;
-
+    let position = options.position
     var container = document.createElement('div');
-    container.style.cssText = 'position:fixed;top:69px;left:0;cursor:pointer;opacity:0.9;z-index:10000';
+    container.style.cssText = `position:fixed;top:${position.top}px;left:${position.left}px;cursor:pointer;opacity:0.9;z-index:10000`;
     container.addEventListener('click', function (event) {
 
         event.preventDefault();

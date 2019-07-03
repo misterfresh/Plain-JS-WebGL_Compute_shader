@@ -1,151 +1,159 @@
-import Stats from '/dependencies/stats.js';
+const CANVAS_WIDTH = 512;
+const CANVAS_HEIGHT = 512;
+const NUM_PARTICLES = 8;
 
-import computeShaderSource from './vertexdemo_compute_shader_glsl.js'
-import vertexShaderSource from './vertexdemo_vertex_shader_glsl.js'
-import fragmentShaderSource from './vertexdemo_fragment_shader_glsl.js'
+import stats from '/dependencies/stats';
 
-export class Main
-{
-    CANVAS_WIDTH = 512;
-    CANVAS_HEIGHT = 512;
+let context;
+let computeProgram;
+let renderProgram;
+let ssbo;
+let timeUniformLocation;
+let time;
 
-    NUM_PARTICLES = 8;
+const script = async () => {
+  // Canvas setup
+  const canvas = document.getElementById(('myCanvas'));
+  canvas.width = CANVAS_WIDTH;
+  canvas.height = CANVAS_HEIGHT;
 
-    stats;
+  // Create WebGL2ComputeRenderingContext
+  context = canvas.getContext('webgl2-compute');
+  if (!context) {
+    document.body.className = 'error';
+    return;
+  }
 
-    context;
-    computeProgram;
-    renderProgram;
-    ssbo;
-    timeUniformLocation;
+  // Stats setup
+  stats = new Stats();
+  document.body.appendChild(stats.domElement);
 
-    time;
-
-    constructor()
-    {
-        console.log(new Date());
-        this.init();
+  // ComputeShader source
+  // language=GLSL
+  const computeShaderSource = `#version 310 es
+    layout (local_size_x = 8, local_size_y = 1, local_size_z = 1) in;
+    layout (std430, binding = 0) buffer SSBO {
+      vec2 pos[];
+    } ssbo;
+    
+    uniform float time;
+    
+    void main() {
+      uint threadIndex = gl_GlobalInvocationID.x;
+      float floatIndex = float(threadIndex);
+      ssbo.pos[threadIndex] = vec2(floatIndex * 0.25 - 0.875, 0.5 * sin(time * 0.02 + floatIndex * 0.5));
     }
+    `;
 
-    async init()
-{
-    // Canvas setup
-    const canvas = document.getElementById(('myCanvas'));
-    canvas.width = Main.CANVAS_WIDTH;
-    canvas.height = Main.CANVAS_HEIGHT;
+  // create WebGLShader for ComputeShader
+  const computeShader = context.createShader(context.COMPUTE_SHADER);
+  context.shaderSource(computeShader, computeShaderSource);
+  context.compileShader(computeShader);
+  if (!context.getShaderParameter(computeShader, context.COMPILE_STATUS)) {
+    console.log(context.getShaderInfoLog(computeShader));
+    return;
+  }
 
-    // Create WebGL2ComputeRenderingContext
-    const context = canvas.getContext('webgl2-compute');
-    if(!context)
-    {
-        document.body.className = 'error';
-        return;
+  // create WebGLProgram for ComputeShader
+  computeProgram = context.createProgram();
+  context.attachShader(computeProgram, computeShader);
+  context.linkProgram(computeProgram);
+  if (!context.getProgramParameter(computeProgram, context.LINK_STATUS)) {
+    console.log(context.getProgramInfoLog(computeProgram));
+    return;
+  }
+
+  // get uniform location in ComputeShader
+  timeUniformLocation = context.getUniformLocation(computeProgram, 'time');
+
+  // create ShaderStorageBuffer
+  ssbo = context.createBuffer();
+  context.bindBuffer(context.SHADER_STORAGE_BUFFER, ssbo);
+  context.bufferData(context.SHADER_STORAGE_BUFFER, new Float32Array(NUM_PARTICLES * 2), context.DYNAMIC_COPY);
+  context.bindBufferBase(context.SHADER_STORAGE_BUFFER, 0, ssbo);
+
+  // VertexShader source
+  // language=GLSL
+  const vertexShaderSource = `#version 310 es
+    layout (location = 0) in vec2 position;
+
+    void main() {
+      gl_Position = vec4(position, 0.0, 1.0);
+      gl_PointSize = 3.0;
     }
-    this.context = context;
+    `;
 
-    // Stats setup
-    this.stats = new Stats();
-    document.getElementById('stats-container').appendChild(this.stats.dom);
+  // create WebGLShader for VertexShader
+  const vertexShader = context.createShader(context.VERTEX_SHADER);
+  context.shaderSource(vertexShader, vertexShaderSource);
+  context.compileShader(vertexShader);
+  if (!context.getShaderParameter(vertexShader, context.COMPILE_STATUS)) {
+    console.log(context.getShaderInfoLog(vertexShader));
+    return;
+  }
 
-    // create WebGLShader for ComputeShader
-    const computeShader = context.createShader(context.COMPUTE_SHADER);
-    context.shaderSource(computeShader, computeShaderSource);
-    context.compileShader(computeShader);
-    if(!context.getShaderParameter(computeShader, context.COMPILE_STATUS))
-    {
-        console.log(context.getShaderInfoLog(computeShader));
+  // FragmentShader source
+  // language=GLSL
+  const fragmentShaderSource = `#version 310 es
+    precision highp float;
+    
+    out vec4 outColor;
+ 
+    void main() {
+      outColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
+    `;
 
-    // create WebGLProgram for ComputeShader
-    const computeProgram = context.createProgram();
-    context.attachShader(computeProgram, computeShader);
-    context.linkProgram(computeProgram);
-    if(!context.getProgramParameter(computeProgram, context.LINK_STATUS))
-    {
-        console.log(context.getProgramInfoLog(computeProgram));
-    }
-    this.computeProgram = computeProgram;
+  // create WebGLShader for FragmentShader
+  const fragmentShader = context.createShader(context.FRAGMENT_SHADER);
+  context.shaderSource(fragmentShader, fragmentShaderSource);
+  context.compileShader(fragmentShader);
+  if (!context.getShaderParameter(fragmentShader, context.COMPILE_STATUS)) {
+    console.log(context.getShaderInfoLog(fragmentShader));
+    return;
+  }
 
-    // get uniform location in ComputeShader
-    this.timeUniformLocation = context.getUniformLocation(computeProgram, 'time');
+  // create WebGLProgram for rendering
+  renderProgram = context.createProgram();
+  context.attachShader(renderProgram, vertexShader);
+  context.attachShader(renderProgram, fragmentShader);
+  context.linkProgram(renderProgram);
+  if (!context.getProgramParameter(renderProgram, context.LINK_STATUS)) {
+    console.log(context.getProgramInfoLog(renderProgram));
+    return;
+  }
 
-    // create ShaderStorageBuffer
-    const ssbo = context.createBuffer();
-    context.bindBuffer(context.SHADER_STORAGE_BUFFER, ssbo);
-    this.context.bufferData(this.context.SHADER_STORAGE_BUFFER, new Float32Array(Main.NUM_PARTICLES * 2), this.context.STATIC_DRAW);
-    this.context.bindBufferBase(this.context.SHADER_STORAGE_BUFFER, 0, ssbo);
-    this.ssbo = ssbo;
+  // bind ShaderStorageBuffer as ARRAY_BUFFER
+  context.bindBuffer(context.ARRAY_BUFFER, ssbo);
+  context.enableVertexAttribArray(0);
+  context.vertexAttribPointer(0, 2, context.FLOAT, false, 0, 0);
 
-    // create WebGLShader for VertexShader
-    const vertexShader = this.context.createShader(this.context.VERTEX_SHADER);
-    this.context.shaderSource(vertexShader, vertexShaderSource);
-    this.context.compileShader(vertexShader);
-    if(!this.context.getShaderParameter(vertexShader, this.context.COMPILE_STATUS))
-    {
-        console.log(this.context.getShaderInfoLog(vertexShader));
-    }
+  // initialize states
+  context.clearColor(0.2, 0.2, 0.2, 1.0);
+  time = 0.0;
 
-    // create WebGLShader for FragmentShader
-    const fragmentShader = this.context.createShader(this.context.FRAGMENT_SHADER);
-    this.context.shaderSource(fragmentShader, fragmentShaderSource);
-    this.context.compileShader(fragmentShader);
-    if(!this.context.getShaderParameter(fragmentShader, this.context.COMPILE_STATUS))
-    {
-        console.log(this.context.getShaderInfoLog(fragmentShader));
-    }
+  render();
+};
 
-    // create WebGLProgram for rendering
-    const renderProgram = this.context.createProgram();
-    this.context.attachShader(renderProgram, vertexShader);
-    this.context.attachShader(renderProgram, fragmentShader);
-    this.context.linkProgram(renderProgram);
-    if(!this.context.getProgramParameter(renderProgram, this.context.LINK_STATUS))
-    {
-        console.log(this.context.getProgramInfoLog(renderProgram));
-    }
-    this.renderProgram = renderProgram;
+const render = () => {
+  stats.begin();
 
-    // bind ShaderStorageBuffer as ARRAY_BUFFER
-    this.context.bindBuffer(this.context.ARRAY_BUFFER, ssbo);
-    this.context.enableVertexAttribArray(0);
-    this.context.vertexAttribPointer(0, 2, this.context.FLOAT, false, 0, 0);
+  time += 1.0;
 
-    // initialize states
-    context.clearColor(0.2, 0.2, 0.2, 1.0);
-    this.time = 0.0;
+  // execute ComputeShader
+  context.useProgram(computeProgram);
+  context.uniform1f(timeUniformLocation, time);
+  context.dispatchCompute(1, 1, 1);
+  context.memoryBarrier(context.VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
-    this.render();
-}
+  // render
+  context.clear(context.COLOR_BUFFER_BIT);
+  context.useProgram(renderProgram);
+  context.drawArrays(context.POINTS, 0, NUM_PARTICLES);
 
-    render()
-    {
-        this.stats.begin();
+  stats.end();
 
-        this.time += 1.0;
+  requestAnimationFrame(render);
+};
 
-        // execute ComputeShader
-        this.context.useProgram(this.computeProgram);
-        this.context.uniform1f(this.timeUniformLocation, this.time);
-        this.context.dispatchCompute(1, 1, 1);
-        this.context.memoryBarrier(this.context.VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-
-        // render
-        this.context.clear(this.context.COLOR_BUFFER_BIT);
-        this.context.useProgram(this.renderProgram);
-        this.context.drawArrays(this.context.POINTS, 0, Main.NUM_PARTICLES);
-
-        this.stats.end();
-
-        requestAnimationFrame(() => this.render());
-    }
-}
-
-Main.CANVAS_WIDTH = 512;
-Main.CANVAS_HEIGHT = 512;
-Main.NUM_PARTICLES = 8;
-
-window.addEventListener('DOMContentLoaded', () =>
-{
-    new Main();
-});
-
+window.addEventListener('DOMContentLoaded', script);
