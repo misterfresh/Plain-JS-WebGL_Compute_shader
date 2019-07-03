@@ -2,8 +2,9 @@ const CANVAS_WIDTH = 512;
 const CANVAS_HEIGHT = 512;
 const NUM_PARTICLES = 8;
 
-import stats from '/dependencies/stats';
+import Stats from '/dependencies/stats.js';
 
+let stats;
 let context;
 let computeProgram;
 let renderProgram;
